@@ -1,4 +1,4 @@
-# Kinesis Editor
+# Kinesis Editor Test
 
 **Editor de motion design gratuito e open-source para Android.** Texto animado, formas, vídeo, áudio, efeitos e
 objetos 3D na mesma timeline, com keyframes e curvas. Sem marca-d'água, sem assinatura, sem conta, sem IA generativa e sem internet.
