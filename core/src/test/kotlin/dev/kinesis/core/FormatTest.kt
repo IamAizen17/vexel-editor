@@ -28,6 +28,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.util.zip.ZipEntry
@@ -142,6 +143,50 @@ class FormatTest {
         val again = ByteArrayOutputStream()
         KnsprojArchive.write(project, { a -> files[a.path]?.let(::ByteArrayInputStream) }, again, thumbnailJpeg = byteArrayOf(1, 2, 3))
         assertTrue(out.toByteArray().contentEquals(again.toByteArray()))
+    }
+
+    @Test
+    fun exportsCheckedInVideoAudioExampleAsCompatibilityArchive() {
+        val exampleDir = File(TestProjects.repoRoot, ".claude/skills/knsproj/examples/basicos/video-audio")
+        val projectFile = File(exampleDir, "project.json")
+        assertTrue("source example exists: ${projectFile.path}", projectFile.isFile)
+
+        val project = KnsprojJson.decode(projectFile.readText())
+        assertEquals("knsproj", project.format)
+        assertEquals(FORMAT_VERSION, project.formatVersion)
+        assertEquals(2, project.assets.size)
+
+        val assets = project.assets.associate { asset ->
+            val file = File(exampleDir, asset.path)
+            assertTrue("source asset exists: ${file.path}", file.isFile)
+            asset.path to file.readBytes()
+        }
+        assertTrue("video fixture is real media", assets["assets/clip.mp4"]!!.size > 10_000)
+        assertTrue("audio fixture is real media", assets["assets/music.m4a"]!!.size > 1_000)
+
+        val outputDir = File(
+            System.getProperty("knsproj.exportDir")
+                ?: File(TestProjects.repoRoot, "build/compatibility-artifacts").path,
+        ).apply { mkdirs() }
+        val archive = File(outputDir, "kinesis-video-audio.knsproj")
+        archive.outputStream().buffered().use { output ->
+            KnsprojArchive.write(
+                project,
+                { asset -> assets[asset.path]?.let(::ByteArrayInputStream) },
+                output,
+            )
+        }
+
+        assertTrue("archive was written", archive.isFile && archive.length() > 10_000)
+        val received = HashMap<String, ByteArray>()
+        val result = archive.inputStream().buffered().use { input ->
+            KnsprojArchive.read(input) { path, data -> received[path] = data.readBytes() }
+        }
+        assertEquals(project, result.project)
+        assertTrue(ProjectValidator.validate(result.project, result.entries).isValid)
+        for ((path, bytes) in assets) {
+            assertTrue("asset round-trip: $path", bytes.contentEquals(received[path]))
+        }
     }
 
     @Test
